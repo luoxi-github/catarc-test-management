@@ -1,0 +1,50 @@
+#!/usr/local/catarc/python/bin/python3.8 -O
+
+import argparse
+import textwrap
+import sys
+
+from app.api import add_user, delete_user
+
+
+parser = argparse.ArgumentParser(
+    usage='user_admin [options]',
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    description=textwrap.dedent('''\
+        Administrator command line interface.
+
+        examples:
+            user_admin --add --user NAME --password PASSWORD
+                        Add user.
+            user_admin --delete --user NAME --password PASSWORD
+                        Delete user.
+        '''),
+    epilog='catarc.ac.cn')
+
+parser.add_argument('-a', '--add', action='store_true', default=False, help='add user')
+parser.add_argument('-d', '--delete', action='store_true', default=False, help='delete user')
+parser.add_argument('-u', '--user', metavar='username', help='username')
+parser.add_argument('-p', '--password', metavar='password', help='password')
+
+args = parser.parse_args()
+
+if args.add is True:
+    if args.user is not None and args.password is not None:
+        ret, msg = add_user(args.user, args.password)
+        if ret is False:
+            print(msg, file=sys.stderr)
+            exit(1)
+
+        exit(0)
+
+if args.delete is True:
+    if args.user is not None and args.password is not None:
+        ret, msg = delete_user(args.user, args.password)
+        if ret is False:
+            print(msg, file=sys.stderr)
+            exit(1)
+
+        exit(0)
+
+print("Invalid option.", file=sys.stderr)
+exit(1)
