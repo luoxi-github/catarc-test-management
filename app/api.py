@@ -6,10 +6,13 @@ import zipfile
 import shutil
 import re
 import hashlib
+import random
+import string
 
 import pandas
 from docx import Document
 import jwt
+from PIL import Image, ImageFont, ImageDraw, ImageFilter
 
 from common.log import get_logger
 from config.setting import FILE_PATH, DatabaseTable, ITEM_LIST
@@ -34,6 +37,42 @@ from app.pack import (
     PackRtempDchgCapacity,
     PackEnergyDensity
 )
+
+
+def get_verify_code():
+    def rndColor():
+        return (random.randint(32, 127), random.randint(32, 127), random.randint(32, 127))
+
+    def gene_text():
+        return ''.join(random.sample(string.ascii_letters+string.digits, 4))
+
+    def draw_lines(draw, num, width, height):
+        for num in range(num):
+            x1 = random.randint(0, width / 2)
+            y1 = random.randint(0, height / 2)
+            x2 = random.randint(0, width)
+            y2 = random.randint(height / 2, height)
+            draw.line(((x1, y1), (x2, y2)), fill='black', width=1)
+
+    code = gene_text()
+
+    width, height = 120, 50
+
+    im = Image.new('RGB',(width, height),'white')
+
+    font = ImageFont.truetype('static/arial.ttf', 40)
+
+    draw = ImageDraw.Draw(im)
+
+    for item in range(4):
+        draw.text((5+random.randint(-3,3)+23*item, 5+random.randint(-3,3)),
+                  text=code[item], fill=rndColor(),font=font )
+
+    draw_lines(draw, 2, width, height)
+
+    im = im.filter(ImageFilter.GaussianBlur(radius=1.0))
+
+    return im, code
 
 
 def add_user(user, password):
@@ -76,6 +115,45 @@ def delete_user(user, password):
     md5.update(password.encode('utf-8'))
 
     sql = f"DELETE FROM {DatabaseTable.USER} WHERE usr='{user}' AND password='{md5.hexdigest()}'"
+
+    with create_conn() as conn:
+        return execute_sqls(conn, sql)
+
+
+def change_password(user, old_password, new_password):
+    """
+    Change password of user.
+    
+    :param user: The user name
+    :param old_password: the old password
+    :param new_password: the new password
+    """
+
+    logger = get_logger()
+
+    logger.info(f"call change_password: {user}")
+
+    sql = f"SELECT password FROM {DatabaseTable.USER} WHERE usr='{user}'"
+
+    with create_conn() as conn:
+        ret, data = fetch_one(conn, sql)
+
+    if ret is False:
+        return ret, data
+
+    if data is None:
+        return False, f"Can not find user {user}."
+
+    old_md5 = hashlib.md5()
+    old_md5.update(old_password.encode('utf-8'))
+
+    if old_md5.hexdigest() != data[0]:
+        return False, "old password is wrong."
+
+    md5 = hashlib.md5()
+    md5.update(new_password.encode('utf-8'))
+
+    sql = f"UPDATE {DatabaseTable.USER} SET password='{md5.hexdigest()}' WHERE usr='{user}'"
 
     with create_conn() as conn:
         return execute_sqls(conn, sql)
@@ -295,6 +373,9 @@ def upload_test_file(user, task_id, test_file):
         if test_file_name == "":
             test_file_name = new_name_list[0]
 
+    if os.path.isfile(os.path.join(FILE_PATH, task_id, test_file_name)):
+        pathlib.Path(os.path.join(FILE_PATH, task_id, test_file_name)).unlink()
+
     if os.path.isdir(os.path.join(FILE_PATH, task_id, test_file_name)):
         shutil.rmtree(os.path.join(FILE_PATH, task_id, test_file_name))
 
@@ -311,13 +392,22 @@ def upload_test_file(user, task_id, test_file):
             old_file = pathlib.Path(n["new"]).parent.joinpath(pathlib.Path(n["old"]).name)
             old_file.rename(pathlib.Path(n["new"]))
 
+        if os.path.isfile(os.path.join(FILE_PATH, task_id, user)):
+            pathlib.Path(os.path.join(FILE_PATH, task_id, user)).unlink()
+
         if os.path.isdir(os.path.join(FILE_PATH, task_id, user)):
             shutil.rmtree(os.path.join(FILE_PATH, task_id, user))
 
         pathlib.Path(os.path.join(FILE_PATH, task_id, test_file_name)).rename(pathlib.Path(os.path.join(FILE_PATH, task_id, user)))
     except Exception as e:
+        if os.path.isfile(os.path.join(FILE_PATH, task_id, user)):
+            pathlib.Path(os.path.join(FILE_PATH, task_id, user)).unlink()
+
         if os.path.isdir(os.path.join(FILE_PATH, task_id, user)):
             shutil.rmtree(os.path.join(FILE_PATH, task_id, user))
+
+        if os.path.isfile(os.path.join(FILE_PATH, task_id, test_file_name)):
+            pathlib.Path(os.path.join(FILE_PATH, task_id, test_file_name)).unlink()
 
         if os.path.isdir(os.path.join(FILE_PATH, task_id, test_file_name)):
             shutil.rmtree(os.path.join(FILE_PATH, task_id, test_file_name))
@@ -484,6 +574,8 @@ def query_task_upload_info(task_id, task_note, gbt, item, item_note, test_sample
 
             sql += f" test_date >= '{from_date}' AND test_date <= '{to_date}'"
 
+    sql += " ORDER BY create_time DESC"
+
     with create_conn() as conn:
         ret, data = fetch_all(conn, sql)
 
@@ -525,10 +617,10 @@ def query_task_upload_info(task_id, task_note, gbt, item, item_note, test_sample
                 sql = f"SELECT task_id FROM {DatabaseTable.STAT} WHERE task_id = '{task[0]}'"
 
                 if gbt != "":
-                    sql += f" AND gbt = '{gbt}'"
+                    sql += f" AND gbt LIKE '%{gbt}%'"
 
                 if item != "":
-                    sql += f" AND item = '{item}'"                    
+                    sql += f" AND item LIKE '%{item}%'"                    
 
                 if item_note != "":
                     sql += f" AND item_note LIKE '%{item_note}%'" 
@@ -543,9 +635,6 @@ def query_task_upload_info(task_id, task_note, gbt, item, item_note, test_sample
                     continue
 
             task_list.append([task[0], company, task[3].isoformat() if task[3] is not None else "", task[4].isoformat() if task[4] is not None else ""])
-
-    task_list.sort(key=lambda x: x[2], reverse=True)
-    task_list.sort(key=lambda x: x[3], reverse=True)
 
     return True, task_list
 
@@ -684,6 +773,9 @@ def extract_item_file(user, task_id, gbt, category, item, item_file, item_note):
         if item_file_name == "":
             item_file_name = new_name_list[0]
 
+    if os.path.isfile(os.path.join(FILE_PATH, task_id, item_file_name)):
+        pathlib.Path(os.path.join(FILE_PATH, task_id, item_file_name)).unlink()
+
     if os.path.isdir(os.path.join(FILE_PATH, task_id, item_file_name)):
         shutil.rmtree(os.path.join(FILE_PATH, task_id, item_file_name))
 
@@ -700,13 +792,22 @@ def extract_item_file(user, task_id, gbt, category, item, item_file, item_note):
             old_file = pathlib.Path(n["new"]).parent.joinpath(pathlib.Path(n["old"]).name)
             old_file.rename(pathlib.Path(n["new"]))
 
+        if os.path.isfile(os.path.join(FILE_PATH, task_id, user)):
+            pathlib.Path(os.path.join(FILE_PATH, task_id, user)).unlink()
+
         if os.path.isdir(os.path.join(FILE_PATH, task_id, user)):
             shutil.rmtree(os.path.join(FILE_PATH, task_id, user))
 
         pathlib.Path(os.path.join(FILE_PATH, task_id, item_file_name)).rename(pathlib.Path(os.path.join(FILE_PATH, task_id, user)))
     except Exception as e:
+        if os.path.isfile(os.path.join(FILE_PATH, task_id, user)):
+            pathlib.Path(os.path.join(FILE_PATH, task_id, user)).unlink()
+
         if os.path.isdir(os.path.join(FILE_PATH, task_id, user)):
             shutil.rmtree(os.path.join(FILE_PATH, task_id, user))
+
+        if os.path.isfile(os.path.join(FILE_PATH, task_id, item_file_name)):
+            pathlib.Path(os.path.join(FILE_PATH, task_id, item_file_name)).unlink()
 
         if os.path.isdir(os.path.join(FILE_PATH, task_id, item_file_name)):
             shutil.rmtree(os.path.join(FILE_PATH, task_id, item_file_name))

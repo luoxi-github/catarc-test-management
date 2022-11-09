@@ -30,7 +30,7 @@ class CellRtempDchgCapacity(DefaultItem):
             """
 
             try:
-                if self.gbt == "GB 38031-2020":
+                if self.gbt == "GB 38031":
                     df = pandas.read_csv(csv_file, skiprows=13, encoding='gbk', usecols=['Cycle', 'Step', 'Step time, S', 'Power, W', 'Amp-Hours, AH'])
                     df = df.dropna(how='any')
 
@@ -101,7 +101,7 @@ class CellRtempDchgCapacity(DefaultItem):
 
         extract_results.sort(key=lambda x: int(re.sub("\D", "", x[0])))
 
-        if self.gbt == "GB 38031-2020":
+        if self.gbt == "GB 38031":
             item_result = {
                 "table": [['样本编号'] + [f"C{i+1}(第{i+1}轮循环放电容量(AH))" for i in range(len(extract_results[0]) - 2)] + [f"|C{len(extract_results[0]) - 2}-C{len(extract_results[0]) - 3}|/额定放电容量"]]
             }

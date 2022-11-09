@@ -4,7 +4,7 @@ import pathlib
 import zipfile
 from io import BytesIO
 
-from flask import Flask, request, jsonify, make_response, send_from_directory, send_file
+from flask import Flask, request, session, jsonify, make_response, send_from_directory, send_file
 from flask_cors import CORS
 
 from common.log import logger_config, get_logger
@@ -25,8 +25,9 @@ app.config['JSON_AS_ASCII'] = False
 app.config['JSONIFY_MIMETYPE'] = "application/json;charset=utf-8"
 app.config['MAX_CONTENT_LENGTH'] = 10* 1024 * 1024 * 1024
 
-CORS(app)
+app.secret_key = "catarc"
 
+CORS(app)
 
 @app.route("/api/<func>", methods=['POST'])
 def call_api(func):
@@ -44,7 +45,23 @@ def call_api(func):
         if func == "login":
             params = json.loads(request.data.decode('utf-8'))
 
+            if session.get('image').lower() != params["code"].lower():
+                return jsonify({"ret": False, "data": {"code": 0, "message": "Verification code is wrong."}}), 401
+
             ret, data = verify_user(params["user"], params["password"])
+        elif func == "get_verify_code":
+            image, code = get_verify_code()
+
+            buf = BytesIO()
+            image.save(buf, 'jpeg')
+            buf_str = buf.getvalue()
+
+            response = make_response(buf_str)
+            response.headers['Content-Type'] = 'image/gif'
+
+            session['image'] = code
+
+            return response
         elif func == "upload_product_file":
             ret, data = verify_token(request.headers.get('Authorization', ""))
             if ret is False:
@@ -195,13 +212,13 @@ def call_api(func):
 
             ret, data = eval(func)(**params)
     except Exception as e:
-        logger.error(f"Caught exception: {e.__doc__}({e})")
-
         ret = False
         data = f"Caught exception: {e.__doc__}({e})"
 
     if ret is False:
         if not isinstance(data, dict):
+            logger.error(data)
+
             data = {"code": 0, "message": data}
 
     return jsonify({"ret": ret, "data": data})

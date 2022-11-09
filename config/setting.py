@@ -17,13 +17,13 @@ class SampleCategory(object):
     PACK = "蓄电池系统"
 
 ITEM_LIST = {
-    "GBT 31484-2015": {
+    "GBT 31484": {
         "单体蓄电池": {
             "室温放电容量": "CellRtempDchgCapacity",
             "标准循环寿命": "CellStandardCycleLife"
         }
     },
-    "GBT 31486-2015": {
+    "GBT 31486": {
         "单体蓄电池": {
             "尺寸质量": "DefaultItem",
             "外观极性": "DefaultItem",
@@ -44,7 +44,7 @@ ITEM_LIST = {
             "室温倍率充电性能": "ModRtempRateChgPerformance"
         }
     },
-    "GB 38031-2020": {
+    "GB 38031": {
         "单体蓄电池": {
             "外部短路": "DefaultItem",
             "加热": "DefaultItem",
@@ -73,7 +73,7 @@ ITEM_LIST = {
             "室温放电容量": "PackRtempDchgCapacity"
         }
     },
-    "中机函[2017]2号": {
+    "PED": {
         "蓄电池系统": {
             "能量密度": "PackEnergyDensity"
         }
