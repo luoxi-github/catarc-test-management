@@ -58,13 +58,21 @@ class DefaultItem(object):
         index = list(files_dict)
         index.sort(key=lambda x: int(re.sub("\D", "", x)) if re.search("\d+", x) is not None else 0)
 
+        tid = 1
+
         for i in index:
+            data["files"].append({"id": tid, "0": i, "children": []})
+
+            tid += 1
+
             for key, value in files_dict[i].items():
                 for v in value:
                     if key == '':
-                        data["files"].append([f"{i}", v[0], v[1], v[2]])
+                        data["files"][-1]["children"].append({"id": tid, "0": f"{i}", "1": v[0], "2": v[1], "3": v[2]})
                     else:
-                        data["files"].append([f"{i}-{key}", v[0], v[1], v[2]])
+                        data["files"][-1]["children"].append({"id": tid, "0": f"{i}-{key}", "1": v[0], "2": v[1], "3": v[2]})
+
+                    tid += 1
 
         sql = f"SELECT result FROM {DatabaseTable.STAT} WHERE task_id='{self.task_id}' AND gbt='{self.gbt}' AND category='{self.category}' AND item='{self.item}'"
 
